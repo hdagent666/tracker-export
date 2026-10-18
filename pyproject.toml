@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tracker-export"
+version = "1.0.0"
+description = "Bounce per-channel stems and labeled samples out of any tracker module"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+[project.scripts]
+tracker-export = "tracker_export.cli:main"
+tracker-export-gui = "tracker_export.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
