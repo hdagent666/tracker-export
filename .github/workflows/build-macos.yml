@@ -17,6 +17,11 @@ on:
     branches: [main]
     tags: ["v*"]
 
+# The built-in token needs write access to create a GitHub Release
+# when a version tag is pushed.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest  # Apple Silicon (arm64) — matches M-series Macs
