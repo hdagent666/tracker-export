@@ -243,6 +243,109 @@ def export_module(input_path, outdir=None, sample_rate=44100,
     return export_dir
 
 
+# ---------------------------------------------------------------------------
+# Batch export + directory crawling
+# ---------------------------------------------------------------------------
+
+#: Extensions recognised as tracker modules when crawling directories.
+#: Files that turn out not to load are skipped by the batch runner,
+#: so an over-inclusive list is harmless.
+MODULE_EXTENSIONS = {
+    ".mod", ".s3m", ".xm", ".it", ".stm", ".mtm", ".669", ".amf", ".ult",
+    ".dmf", ".okt", ".med", ".dbm", ".mdl", ".mptm", ".nst", ".m15",
+    ".imf", ".far", ".ptm", ".umx", ".sfx", ".gdm", ".dsm", ".j2b",
+    ".psm", ".digi", ".dtm", ".emod", ".fls", ".fnk", ".gtk", ".gt2",
+    ".liq", ".m15", ".mgt", ".mmdc", ".np", ".om", ".plm", ".rtm",
+    ".smod", ".st26", ".xann", ".xm15",
+}
+
+
+def is_module_filename(name):
+    return os.path.splitext(name)[1].lower() in MODULE_EXTENSIONS
+
+
+def collect_modules(inputs, recursive=True):
+    """Expand a mix of files and directories into module file paths.
+
+    Directories are crawled (recursively unless recursive=False);
+    hidden files/folders are skipped. Plain files pass through as-is.
+    Returns a de-duplicated, order-preserving list.
+    """
+    found = []
+
+    def add(path):
+        ap = os.path.abspath(path)
+        if ap not in found:
+            found.append(ap)
+
+    for inp in inputs:
+        if os.path.isdir(inp):
+            if recursive:
+                for root, dirs, files in os.walk(inp):
+                    dirs[:] = sorted(d for d in dirs
+                                     if not d.startswith("."))
+                    for f in sorted(files):
+                        if not f.startswith(".") and is_module_filename(f):
+                            add(os.path.join(root, f))
+            else:
+                for f in sorted(os.listdir(inp)):
+                    p = os.path.join(inp, f)
+                    if (os.path.isfile(p) and not f.startswith(".")
+                            and is_module_filename(f)):
+                        add(p)
+        elif os.path.isfile(inp):
+            add(inp)
+    return found
+
+
+def export_batch(files, outdir=None, sample_rate=44100,
+                 do_stems=True, do_samples=True, lib_path=None,
+                 max_seconds=1200, on_log=None, on_progress=None,
+                 cancel=None):
+    """Export every file in `files`; one bad file never stops the batch.
+
+    Returns (exported_dirs, failures) where failures is a list of
+    (path, reason) tuples. on_progress receives overall 0..1 progress
+    with a human label.
+    """
+    log = on_log or (lambda m: None)
+    n = len(files)
+    exported = []
+    failures = []
+    for i, path in enumerate(files):
+        if cancel is not None and cancel():
+            log("Batch cancelled.")
+            raise ExportCancelled()
+        name = os.path.basename(path)
+        log(f"--- [{i + 1}/{n}] {name} ---")
+
+        def wrap(frac, label, i=i, name=name):
+            if on_progress is not None:
+                on_progress((i + frac) / n, f"{i + 1}/{n} {name}: {label}")
+
+        try:
+            d = export_module(path, outdir=outdir, sample_rate=sample_rate,
+                              do_stems=do_stems, do_samples=do_samples,
+                              lib_path=lib_path, max_seconds=max_seconds,
+                              on_log=log, on_progress=wrap, cancel=cancel)
+            exported.append(d)
+        except ExportCancelled:
+            raise
+        except SystemExit as e:
+            reason = str(e).strip().splitlines()[0] if str(e).strip() \
+                else "unloadable"
+            failures.append((path, reason))
+            log(f"  SKIPPED {name}: {reason}")
+        except Exception as e:  # noqa: BLE001 - keep batch alive
+            failures.append((path, f"{type(e).__name__}: {e}"))
+            log(f"  FAILED {name}: {type(e).__name__}: {e}")
+    log(f"Batch complete: {len(exported)} exported, "
+        f"{len(failures)} skipped/failed, {n} total.")
+    if on_progress is not None:
+        on_progress(1.0, "batch done")
+    return exported, failures
+
+
 def print_info(input_path, lib_path=None):
     with open(input_path, "rb") as f:
         blob = f.read()

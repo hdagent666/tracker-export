@@ -57,9 +57,12 @@ python -m tracker_export.cli song.mod
 
 ## GUI
 
-Launch `tracker-export-gui`, pick a module, choose an output folder
-(blank = next to the module), tick stems/samples, hit **Export**.
-Use **Show export folder** when it finishes to jump straight to the files.
+Launch `tracker-export-gui`, build a queue with **Add files** or
+**Add folder** (crawls the folder and all subfolders for modules),
+choose an output folder (blank = an export folder next to each module),
+tick stems/samples, hit **Export**. The whole queue is exported as one
+batch; files that fail to load are logged and skipped, not fatal.
+Use **Show last export** when it finishes to jump straight to the files.
 
 ## CLI
 
@@ -68,6 +71,13 @@ tracker-export song.mod
 tracker-export song.xm -o ~/Desktop --sr 48000
 tracker-export song.it --no-stems        # samples only
 tracker-export song.s3m --info           # print module info, don't export
+
+# Batch: many files at once
+tracker-export a.mod b.xm c.s3m -o ~/Exports
+
+# Batch: crawl a whole directory tree for modules
+tracker-export ~/ModArchive -o ~/Exports
+tracker-export ~/ModArchive --flat       # top level only, no subfolders
 ```
 
 ## macOS app bundle
