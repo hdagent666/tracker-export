@@ -270,13 +270,20 @@ class ExportApp(tk.Tk):
         list_frame.columnconfigure(0, weight=1)
         list_frame.rowconfigure(0, weight=1)
         main.rowconfigure(10, weight=1)
+        # Inset like the FT2 square (1px groove + deep well) with a
+        # left margin so the paths start at the same 12px inset as
+        # the text in the terminal/messages box below.
+        groove = tk.Frame(list_frame, background="#55557F")
+        groove.grid(row=0, column=0, sticky="nsew")
+        well = tk.Frame(groove, background=DEEP)
+        well.pack(fill="both", expand=True, padx=1, pady=1)
         self.queue_box = tk.Listbox(
-            list_frame, height=6, selectmode="extended",
+            well, height=6, selectmode="extended",
             background=DEEP, foreground=FG, font=FONT,
             selectbackground=SELECT, selectforeground="#FFFFFF",
-            relief="sunken", borderwidth=2, highlightthickness=0,
+            relief="flat", borderwidth=0, highlightthickness=0,
             activestyle="none")
-        self.queue_box.grid(row=0, column=0, sticky="nsew")
+        self.queue_box.pack(fill="both", expand=True, padx=(9, 0))
         sb = ttk.Scrollbar(list_frame, orient="vertical",
                            command=self.queue_box.yview)
         sb.grid(row=0, column=1, sticky="ns")

@@ -1,6 +1,6 @@
 """tracker_export — bounce stems and samples out of tracker modules."""
 
-__version__ = "1.6.1"
+__version__ = "1.6.2"
 __all__ = ["export_module", "export_batch", "collect_modules",
            "read_module_text", "print_info", "find_libxmp",
            "ExportCancelled"]
