@@ -128,6 +128,7 @@ class ExportApp(tk.Tk):
         self.worker = None
         self.last_export_dir = None
         self._msg_cache = {}
+        self._msg_meta_cache = {}
         self._msg_path = None
         self._view = "terminal"
 
@@ -170,11 +171,23 @@ class ExportApp(tk.Tk):
         tk.Label(left, text="S T E M S   +   S A M P L E S   B O U N C E R",
                  font=FONT_SUB, foreground=DIM,
                  background=BLACK).pack(anchor="w", pady=(2, 0))
-        tk.Label(banner,
-                 text="C-4 01 ·· ···\nE-4 02 ·· A06\nG-4 01 ·· ···",
-                 font=FONT_LOG, foreground=GREEN, background=BLACK,
-                 justify="left").grid(row=0, column=1, sticky="e",
-                                      padx=12)
+        # Top-right readout: the selected module's file name and the
+        # message hidden in it (its title), like a "now loaded" display.
+        readout = tk.Frame(banner, background=BLACK)
+        readout.grid(row=0, column=1, sticky="e", padx=12)
+        self.bn_file = tk.Label(readout, text="", font=FONT_B,
+                                foreground=ACCENT, background=BLACK,
+                                justify="right")
+        self.bn_file.pack(anchor="e")
+        self.bn_title = tk.Label(readout, text="C-4 01 ·· ···",
+                                 font=FONT_LOG, foreground=GREEN,
+                                 background=BLACK, justify="right")
+        self.bn_title.pack(anchor="e")
+        self.bn_meta = tk.Label(readout, text="", font=FONT_LOG,
+                                foreground=DIM, background=BLACK,
+                                justify="right")
+        self.bn_meta.pack(anchor="e")
+        self._banner_idle()
 
     def _step(self, parent, row, text):
         ttk.Label(parent, text=text, style="Head.TLabel").grid(
@@ -398,6 +411,24 @@ class ExportApp(tk.Tk):
 
     # -- messages from the past --------------------------------------------
 
+    @staticmethod
+    def _clip(text, limit=36):
+        return text if len(text) <= limit else text[:limit - 1] + "…"
+
+    def _banner_idle(self):
+        self.bn_file.configure(text="")
+        self.bn_title.configure(text="C-4 01 ·· ···")
+        self.bn_meta.configure(text="")
+
+    def _set_banner(self, path, meta):
+        self.bn_file.configure(
+            text=self._clip(os.path.basename(path)))
+        self.bn_title.configure(
+            text=self._clip(meta.get("title") or "(untitled)"))
+        parts = meta.get("parts") or []
+        meta_line = " · ".join(parts) if parts else (meta.get("type") or "")
+        self.bn_meta.configure(text=self._clip(meta_line))
+
     def _scroll_active(self, *args):
         target = self.messages if self._view == "messages" else self.log
         target.yview(*args)
@@ -417,6 +448,7 @@ class ExportApp(tk.Tk):
 
     def _reset_messages(self):
         self._msg_path = None
+        self._banner_idle()
         self._show_messages(
             "Messages from the past\n"
             "\n"
@@ -445,8 +477,14 @@ class ExportApp(tk.Tk):
         path = self.queue_box.get(sel[0])
         self._msg_path = path
         self._switch_view("messages")
+        self.bn_file.configure(text=self._clip(os.path.basename(path)))
+        self.bn_title.configure(text="reading…")
+        self.bn_meta.configure(text="")
         if path in self._msg_cache:
             self._show_messages(self._msg_cache[path])
+            meta = self._msg_meta_cache.get(path)
+            if meta:
+                self._set_banner(path, meta)
             return
         self._show_messages(
             f"messages from {os.path.basename(path)}\n\nReading...")
@@ -454,8 +492,9 @@ class ExportApp(tk.Tk):
                          args=(path,), daemon=True).start()
 
     def _read_messages_worker(self, path):
+        meta = None
         try:
-            _meta, text = read_module_text(path)
+            meta, text = read_module_text(path)
             body = text
         except SystemExit as e:
             body = (f"messages from {os.path.basename(path)}\n\n"
@@ -463,7 +502,7 @@ class ExportApp(tk.Tk):
         except Exception as e:  # noqa: BLE001
             body = (f"messages from {os.path.basename(path)}\n\n"
                     f"Couldn't read this file: {type(e).__name__}: {e}")
-        self.events.put(("messages", (path, body)))
+        self.events.put(("messages", (path, body, meta)))
 
     # -- export -------------------------------------------------------------
 
@@ -527,10 +566,14 @@ class ExportApp(tk.Tk):
                 if kind == "log":
                     self._log(data)
                 elif kind == "messages":
-                    path, body = data
+                    path, body, meta = data
                     self._msg_cache[path] = body
+                    if meta:
+                        self._msg_meta_cache[path] = meta
                     if self._msg_path == path:
                         self._show_messages(body)
+                        if meta:
+                            self._set_banner(path, meta)
                 elif kind == "progress":
                     frac, label = data
                     self.progress.configure(value=int(frac * 1000))
