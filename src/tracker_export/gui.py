@@ -55,6 +55,8 @@ FONT_LOG = ("Courier New", 10)
 FONT_TITLE = ("Courier New", 25, "bold")
 FONT_SUB = ("Courier New", 10, "bold")
 
+BOX_ROWS = 8  # visible rows in the FT2-style top-right square
+
 
 def _apply_ft2_theme(root):
     style = ttk.Style(root)
@@ -131,6 +133,9 @@ class ExportApp(tk.Tk):
         self._msg_meta_cache = {}
         self._msg_path = None
         self._view = "terminal"
+        self._scroll_id = None
+        self._scroll_offset = 0
+        self._scroll_max = 0
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -150,6 +155,7 @@ class ExportApp(tk.Tk):
             pass
 
     def _on_close(self):
+        self._stop_scroll()
         self._save_settings()
         self.destroy()
 
@@ -171,23 +177,23 @@ class ExportApp(tk.Tk):
         tk.Label(left, text="S T E M S   +   S A M P L E S   B O U N C E R",
                  font=FONT_SUB, foreground=DIM,
                  background=BLACK).pack(anchor="w", pady=(2, 0))
-        # Top-right readout: the selected module's file name and the
-        # message hidden in it (its title), like a "now loaded" display.
-        readout = tk.Frame(banner, background=BLACK)
-        readout.grid(row=0, column=1, sticky="e", padx=12)
-        self.bn_file = tk.Label(readout, text="", font=FONT_B,
-                                foreground=ACCENT, background=BLACK,
-                                justify="right")
-        self.bn_file.pack(anchor="e")
-        self.bn_title = tk.Label(readout, text="C-4 01 ·· ···",
-                                 font=FONT_LOG, foreground=GREEN,
-                                 background=BLACK, justify="right")
-        self.bn_title.pack(anchor="e")
-        self.bn_meta = tk.Label(readout, text="", font=FONT_LOG,
-                                foreground=DIM, background=BLACK,
-                                justify="right")
-        self.bn_meta.pack(anchor="e")
-        self._banner_idle()
+        # Top-right square, modelled on FT2's own: a black inset that
+        # shows the module's name slots (the classic hiding place for
+        # messages), white text, slot numbers down the left, scrolling
+        # vertically when the text overflows the square.
+        groove = tk.Frame(banner, background="#55557F")
+        groove.grid(row=0, column=1, sticky="e", padx=12, pady=8)
+        self.box = tk.Text(groove, width=31, height=BOX_ROWS,
+                           font=FONT_LOG, background=BLACK,
+                           foreground="#F0F0F0", relief="flat",
+                           borderwidth=0, highlightthickness=0,
+                           wrap="none", padx=5, pady=3,
+                           state="disabled", cursor="arrow")
+        self.box.pack(padx=1, pady=1)
+        self.box.tag_configure("num", foreground=DIM)
+        self.box.tag_configure("name", foreground="#F0F0F0")
+        self.box.tag_configure("dim", foreground=DIM)
+        self._box_idle()
 
     def _step(self, parent, row, text):
         ttk.Label(parent, text=text, style="Head.TLabel").grid(
@@ -411,23 +417,70 @@ class ExportApp(tk.Tk):
 
     # -- messages from the past --------------------------------------------
 
-    @staticmethod
-    def _clip(text, limit=36):
-        return text if len(text) <= limit else text[:limit - 1] + "…"
+    # The FT2 square: rows of (gutter, text, tag) fill the box, and a
+    # timer scrolls them vertically when they overflow, FT2-style.
 
-    def _banner_idle(self):
-        self.bn_file.configure(text="")
-        self.bn_title.configure(text="C-4 01 ·· ···")
-        self.bn_meta.configure(text="")
+    def _box_fill(self, rows):
+        self._stop_scroll()
+        self.box.configure(state="normal")
+        self.box.delete("1.0", "end")
+        for gutter, text, tag in rows:
+            if gutter:
+                self.box.insert("end", gutter, "num")
+            self.box.insert("end", text + "\n", tag)
+        self.box.configure(state="disabled")
+        self.box.yview_moveto(0)
+        self._scroll_offset = 0
+        self._scroll_max = max(0, len(rows) - BOX_ROWS)
+        if self._scroll_max > 0:
+            self._scroll_id = self.after(2400, self._scroll_down)
 
-    def _set_banner(self, path, meta):
-        self.bn_file.configure(
-            text=self._clip(os.path.basename(path)))
-        self.bn_title.configure(
-            text=self._clip(meta.get("title") or "(untitled)"))
-        parts = meta.get("parts") or []
-        meta_line = " · ".join(parts) if parts else (meta.get("type") or "")
-        self.bn_meta.configure(text=self._clip(meta_line))
+    def _box_idle(self):
+        self._box_fill([
+            ("", "", "dim"),
+            ("", "  TRACKER EXPORT II", "dim"),
+            ("", "  no module selected", "dim"),
+        ])
+
+    def _set_box(self, meta):
+        rows = []
+        for line in meta.get("box_comment") or []:
+            rows.append(("    ", line, "name"))
+        slots = meta.get("box_slots") or []
+        if rows and slots:
+            rows.append(("", "", "name"))
+        for i, name in enumerate(slots):
+            rows.append((f"{i + 1:02d}  ", name, "name"))
+        if not rows:
+            rows = [("", "  no text in this one", "dim")]
+        self._box_fill(rows)
+
+    def _stop_scroll(self):
+        if self._scroll_id is not None:
+            try:
+                self.after_cancel(self._scroll_id)
+            except Exception:
+                pass
+            self._scroll_id = None
+
+    def _scroll_down(self):
+        try:
+            if self._scroll_offset < self._scroll_max:
+                self.box.yview_scroll(1, "units")
+                self._scroll_offset += 1
+                self._scroll_id = self.after(280, self._scroll_down)
+            else:
+                self._scroll_id = self.after(2400, self._scroll_reset)
+        except tk.TclError:
+            self._scroll_id = None
+
+    def _scroll_reset(self):
+        try:
+            self.box.yview_moveto(0)
+            self._scroll_offset = 0
+            self._scroll_id = self.after(2400, self._scroll_down)
+        except tk.TclError:
+            self._scroll_id = None
 
     def _scroll_active(self, *args):
         target = self.messages if self._view == "messages" else self.log
@@ -448,7 +501,7 @@ class ExportApp(tk.Tk):
 
     def _reset_messages(self):
         self._msg_path = None
-        self._banner_idle()
+        self._box_idle()
         self._show_messages(
             "Messages from the past\n"
             "\n"
@@ -477,14 +530,12 @@ class ExportApp(tk.Tk):
         path = self.queue_box.get(sel[0])
         self._msg_path = path
         self._switch_view("messages")
-        self.bn_file.configure(text=self._clip(os.path.basename(path)))
-        self.bn_title.configure(text="reading…")
-        self.bn_meta.configure(text="")
+        self._box_fill([("", "  reading…", "dim")])
         if path in self._msg_cache:
             self._show_messages(self._msg_cache[path])
             meta = self._msg_meta_cache.get(path)
             if meta:
-                self._set_banner(path, meta)
+                self._set_box(meta)
             return
         self._show_messages(
             f"messages from {os.path.basename(path)}\n\nReading...")
@@ -573,7 +624,7 @@ class ExportApp(tk.Tk):
                     if self._msg_path == path:
                         self._show_messages(body)
                         if meta:
-                            self._set_banner(path, meta)
+                            self._set_box(meta)
                 elif kind == "progress":
                     frac, label = data
                     self.progress.configure(value=int(frac * 1000))

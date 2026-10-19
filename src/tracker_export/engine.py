@@ -207,6 +207,19 @@ def _clean_text(raw):
     return "".join(c for c in text if c.isprintable()).strip()
 
 
+def _clean_slot_name(raw):
+    """Clean a name slot the way FT2 displays it in its top-right
+    square: the author's own layout spaces are kept, only trailing
+    padding is dropped."""
+    if not raw:
+        return ""
+    if isinstance(raw, bytes):
+        text = raw.split(b"\x00")[0].decode("latin-1", "replace")
+    else:
+        text = str(raw)
+    return "".join(c for c in text if c.isprintable()).rstrip()
+
+
 def _clean_comment(raw):
     """Clean a module comment/song message, preserving line breaks."""
     if not raw:
@@ -293,6 +306,7 @@ class XmpEngine:
                 "raw": raw,
             })
         inst_names = []
+        inst_slots = []
         sample_to_inst = {}
         if mod.xxi:
             insts = ctypes.cast(mod.xxi, ctypes.POINTER(_XmpInstrument))
@@ -300,6 +314,7 @@ class XmpEngine:
                 xi = insts[i]
                 nm = _clean_text(xi.name)
                 inst_names.append(nm)
+                inst_slots.append(_clean_slot_name(xi.name))
                 if xi.sub and xi.nsm > 0:
                     for j in range(xi.nsm):
                         sid = xi.sub[j].sid
@@ -307,6 +322,9 @@ class XmpEngine:
                             nm or f"instrument {i + 1}")
         info["sample_list"] = samples
         info["instrument_names"] = inst_names
+        info["instrument_slots"] = inst_slots
+        info["sample_slots"] = [_clean_slot_name(mod.xxs[i].name)
+                                for i in range(mod.smp)]
         info["sample_to_inst"] = sample_to_inst
         return info
 

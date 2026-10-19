@@ -305,6 +305,25 @@ def format_module_text(info, source_name):
     return "\n".join(out) + "\n"
 
 
+def module_box_content(info):
+    """Content for an FT2-style top-right square: the song message
+    lines, then the name slots in order — exactly the text block FT2
+    shows in that square, layout spaces included. Returns
+    (comment_lines, slot_lines), trailing empty slots trimmed."""
+    comment_lines = []
+    if info.get("comment"):
+        comment_lines = [ln.rstrip()
+                         for ln in info["comment"].split("\n")]
+        while comment_lines and not comment_lines[-1]:
+            comment_lines.pop()
+    slots = list(info.get("instrument_slots") or [])
+    if not any(slots):
+        slots = list(info.get("sample_slots") or [])
+    while slots and not slots[-1]:
+        slots.pop()
+    return comment_lines[:128], slots[:256]
+
+
 def read_module_text(input_path, lib_path=None):
     """Load a module just to read its hidden text. Returns
     (info_dict, formatted_text). Raises RuntimeError/SystemExit like
@@ -320,10 +339,12 @@ def read_module_text(input_path, lib_path=None):
         info = engine.load(blob)
         text = format_module_text(info, os.path.basename(input_path))
         parts = module_text_parts(info)
+        box_comment, box_slots = module_box_content(info)
     finally:
         engine.unload(info)
     return {"title": info["title"], "type": info["type"],
-            "comment": info["comment"], "parts": parts}, text
+            "comment": info["comment"], "parts": parts,
+            "box_comment": box_comment, "box_slots": box_slots}, text
 
 
 # ---------------------------------------------------------------------------
