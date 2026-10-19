@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tracker-export"
-version = "1.3.0"
+version = "1.4.0"
 description = "Bounce per-channel stems and labeled samples out of any tracker module"
 readme = "README.md"
 requires-python = ">=3.9"

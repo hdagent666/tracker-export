@@ -207,6 +207,22 @@ def _clean_text(raw):
     return "".join(c for c in text if c.isprintable()).strip()
 
 
+def _clean_comment(raw):
+    """Clean a module comment/song message, preserving line breaks."""
+    if not raw:
+        return ""
+    if isinstance(raw, bytes):
+        text = raw.split(b"\x00")[0].decode("latin-1", "replace")
+    else:
+        text = str(raw)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = []
+    for line in text.split("\n"):
+        line = "".join(c for c in line if c.isprintable() or c == "\t")
+        lines.append(line.rstrip())
+    return "\n".join(lines).strip("\n").strip()
+
+
 class XmpEngine:
     """Thin wrapper around libxmp."""
 
@@ -252,6 +268,7 @@ class XmpEngine:
             "ctx": ctx,
             "blob": blob,  # keep alive while context exists
             "title": _clean_text(mod.name),
+            "comment": _clean_comment(mi.comment),
             "type": _clean_text(mod.type),
             "channels": mod.chn,
             "instruments": mod.ins,

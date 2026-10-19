@@ -19,7 +19,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
-from .export import ExportCancelled, collect_modules, export_batch
+from .export import (ExportCancelled, collect_modules, export_batch,
+                     read_module_text)
 
 FILETYPES = [
     ("Tracker modules",
@@ -126,6 +127,9 @@ class ExportApp(tk.Tk):
         self.events = queue.Queue()
         self.worker = None
         self.last_export_dir = None
+        self._msg_cache = {}
+        self._msg_path = None
+        self._view = "terminal"
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -258,26 +262,54 @@ class ExportApp(tk.Tk):
         sb.grid(row=0, column=1, sticky="ns")
         self.queue_box.configure(yscrollcommand=sb.set)
 
-        # 5 · TERMINAL ---------------------------------------------------------
-        self._step(main, 11, "5 · TERMINAL")
+        # 5 · TERMINAL / MESSAGES FROM THE PAST --------------------------------
+        hdr5 = ttk.Frame(main)
+        hdr5.grid(row=11, column=0, sticky="ew", pady=(8, 2))
+        ttk.Label(hdr5, text="5 · TERMINAL / MESSAGES",
+                  style="Head.TLabel").pack(side="left")
+        self.msg_tab_btn = tk.Button(
+            hdr5, text="Messages from the past",
+            command=lambda: self._switch_view("messages"),
+            background=BTN, foreground="#FFFFFF", font=FONT_B,
+            activebackground=BTN_ACTIVE, activeforeground="#FFFFFF",
+            borderwidth=2, relief="raised", padx=8, pady=1)
+        self.msg_tab_btn.pack(side="right")
+        self.term_tab_btn = tk.Button(
+            hdr5, text="Terminal",
+            command=lambda: self._switch_view("terminal"),
+            background=BTN, foreground="#FFFFFF", font=FONT_B,
+            activebackground=BTN_ACTIVE, activeforeground="#FFFFFF",
+            borderwidth=2, relief="sunken", padx=8, pady=1)
+        self.term_tab_btn.pack(side="right", padx=(0, 6))
+
         log_frame = ttk.Frame(main)
         log_frame.grid(row=12, column=0, sticky="nsew")
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
         main.rowconfigure(12, weight=1)
-        self.log = tk.Text(log_frame, height=9, wrap="word",
-                           state="disabled", background=BLACK,
-                           foreground=LOGFG, font=FONT_LOG,
-                           insertbackground="#FFFFFF", relief="sunken",
-                           borderwidth=2, highlightthickness=0)
+
+        text_kw = dict(height=9, wrap="word", state="disabled",
+                       background=BLACK, foreground=LOGFG, font=FONT_LOG,
+                       insertbackground="#FFFFFF", relief="sunken",
+                       borderwidth=2, highlightthickness=0)
+        self.log = tk.Text(log_frame, **text_kw)
         self.log.grid(row=0, column=0, sticky="nsew")
+        self.messages = tk.Text(log_frame, **text_kw)
+        self.messages.grid(row=0, column=0, sticky="nsew")
+        self.messages.grid_remove()
+        for widget in (self.log, self.messages):
+            widget.tag_configure("head", foreground=GREEN, font=FONT_B)
+            widget.tag_configure("err", foreground=RED)
+            widget.tag_configure("ok", foreground=ACCENT, font=FONT_B)
+        self.messages.tag_configure("from", foreground=ACCENT,
+                                    font=FONT_B)
         lsb = ttk.Scrollbar(log_frame, orient="vertical",
-                            command=self.log.yview)
+                            command=self._scroll_active)
         lsb.grid(row=0, column=1, sticky="ns")
         self.log.configure(yscrollcommand=lsb.set)
-        self.log.tag_configure("head", foreground=GREEN, font=FONT_B)
-        self.log.tag_configure("err", foreground=RED)
-        self.log.tag_configure("ok", foreground=ACCENT, font=FONT_B)
+        self.messages.configure(yscrollcommand=lsb.set)
+        self.queue_box.bind("<<ListboxSelect>>", self._on_queue_select)
+        self._reset_messages()
 
         # 6 · EXPORT ------------------------------------------------------------
         self.progress = ttk.Progressbar(main, mode="determinate",
@@ -350,16 +382,88 @@ class ExportApp(tk.Tk):
         for idx in reversed(self.queue_box.curselection()):
             self.queue_box.delete(idx)
         self._refresh_count()
+        if self._msg_path and self._msg_path not in self._queued():
+            self._reset_messages()
 
     def _clear_queue(self):
         self.queue_box.delete(0, "end")
         self._refresh_count()
+        self._reset_messages()
 
     def _pick_outdir(self):
         path = filedialog.askdirectory(title="Choose output folder")
         if path:
             self.outdir_var.set(path)
             self._save_settings()
+
+    # -- messages from the past --------------------------------------------
+
+    def _scroll_active(self, *args):
+        target = self.messages if self._view == "messages" else self.log
+        target.yview(*args)
+
+    def _switch_view(self, name):
+        self._view = name
+        if name == "messages":
+            self.log.grid_remove()
+            self.messages.grid()
+            self.msg_tab_btn.configure(relief="sunken")
+            self.term_tab_btn.configure(relief="raised")
+        else:
+            self.messages.grid_remove()
+            self.log.grid()
+            self.term_tab_btn.configure(relief="sunken")
+            self.msg_tab_btn.configure(relief="raised")
+
+    def _reset_messages(self):
+        self._msg_path = None
+        self._show_messages(
+            "Messages from the past\n"
+            "\n"
+            "Select a queued module and the text hidden inside it\n"
+            "appears here: its title, its song message, and the\n"
+            "instrument & sample names — the classic places demo-scene\n"
+            "authors hid their greetings.\n")
+
+    def _show_messages(self, body):
+        self.messages.configure(state="normal")
+        self.messages.delete("1.0", "end")
+        for i, line in enumerate(body.splitlines()):
+            tag = None
+            if i == 0:
+                tag = "from"
+            elif line.startswith("---"):
+                tag = "head"
+            self.messages.insert("end", line + "\n", tag)
+        self.messages.configure(state="disabled")
+        self.messages.yview_moveto(0)
+
+    def _on_queue_select(self, _event=None):
+        sel = self.queue_box.curselection()
+        if not sel:
+            return
+        path = self.queue_box.get(sel[0])
+        self._msg_path = path
+        self._switch_view("messages")
+        if path in self._msg_cache:
+            self._show_messages(self._msg_cache[path])
+            return
+        self._show_messages(
+            f"messages from {os.path.basename(path)}\n\nReading...")
+        threading.Thread(target=self._read_messages_worker,
+                         args=(path,), daemon=True).start()
+
+    def _read_messages_worker(self, path):
+        try:
+            _meta, text = read_module_text(path)
+            body = text
+        except SystemExit as e:
+            body = (f"messages from {os.path.basename(path)}\n\n"
+                    f"No readable text in this one ({e}).")
+        except Exception as e:  # noqa: BLE001
+            body = (f"messages from {os.path.basename(path)}\n\n"
+                    f"Couldn't read this file: {type(e).__name__}: {e}")
+        self.events.put(("messages", (path, body)))
 
     # -- export -------------------------------------------------------------
 
@@ -422,6 +526,11 @@ class ExportApp(tk.Tk):
                 kind, data = self.events.get_nowait()
                 if kind == "log":
                     self._log(data)
+                elif kind == "messages":
+                    path, body = data
+                    self._msg_cache[path] = body
+                    if self._msg_path == path:
+                        self._show_messages(body)
                 elif kind == "progress":
                     frac, label = data
                     self.progress.configure(value=int(frac * 1000))

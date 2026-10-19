@@ -130,6 +130,18 @@ def export_module(input_path, outdir=None, sample_rate=44100,
                  os.path.join(export_dir, os.path.basename(input_path)))
     log("Copied original module.")
 
+    # Preserve any text hidden in the module (title, song message,
+    # instrument/sample names) as messages.txt alongside the audio.
+    msg_parts = module_text_parts(info)
+    wrote_messages = False
+    if msg_parts:
+        with open(os.path.join(export_dir, "messages.txt"), "w") as f:
+            f.write(format_module_text(info,
+                                       os.path.basename(input_path)))
+        wrote_messages = True
+        log(f"Messages preserved ({', '.join(msg_parts)}) "
+            f"-> messages.txt")
+
     # progress accounting: 1 unit per render + 1 per sample file
     nonempty = [s for s in info["sample_list"] if s["len"] > 0 and s["raw"]]
     units = []
@@ -217,6 +229,8 @@ def export_module(input_path, outdir=None, sample_rate=44100,
         f"({len(sample_files)} bounced, {skipped_empty} empty)",
         f"patterns    : {info['patterns']}",
         f"render      : {sample_rate} Hz, 16-bit stereo WAV",
+        *(["messages    : messages.txt (title, song message, "
+           "instrument/sample names)"] if wrote_messages else []),
         "",
         f"sample pitch convention: {rate} Hz, unity note {note_name} "
         f"(MIDI {unity_note})",
@@ -241,6 +255,75 @@ def export_module(input_path, outdir=None, sample_rate=44100,
     prog(1.0, "done")
     log(f"Done. Everything is in:\n  {export_dir}")
     return export_dir
+
+
+# ---------------------------------------------------------------------------
+# Hidden text: titles, song messages, instrument/sample names
+# ---------------------------------------------------------------------------
+
+def module_text_parts(info):
+    """Short descriptions of the text found in a loaded module, e.g.
+    ['title', 'song message', '12 instrument names', '31 sample names'].
+    Empty list when the module carries no text at all."""
+    parts = []
+    if info.get("title"):
+        parts.append("title")
+    if info.get("comment"):
+        parts.append("song message")
+    n_inst = sum(1 for n in info.get("instrument_names", []) if n)
+    if n_inst:
+        parts.append(f"{n_inst} instrument name{'s' if n_inst != 1 else ''}")
+    n_smp = sum(1 for s in info.get("sample_list", []) if s.get("name"))
+    if n_smp:
+        parts.append(f"{n_smp} sample name{'s' if n_smp != 1 else ''}")
+    return parts
+
+
+def format_module_text(info, source_name):
+    """Render a module's hidden text as a readable document: the song
+    message verbatim, then instrument and sample names in slot order
+    (the classic place demo-scene authors hid greetings — read down
+    the list)."""
+    out = [f"messages from {source_name}",
+           "=" * 60,
+           f"title   : {info.get('title') or '(untitled)'}",
+           f"format  : {info.get('type') or ''}"]
+    if info.get("comment"):
+        out += ["", "--- song message " + "-" * 42, info["comment"]]
+    inst = info.get("instrument_names", [])
+    smp = [s.get("name", "") for s in info.get("sample_list", [])]
+    if any(inst) and any(smp):
+        out += ["", "--- instrument names " + "-" * 38]
+        out += [f"{i + 1:3d}  {n}" for i, n in enumerate(inst)]
+        out += ["", "--- sample names " + "-" * 42]
+        out += [f"{i + 1:3d}  {n}" for i, n in enumerate(smp)]
+    elif any(inst) or any(smp):
+        # Sample-based formats (MOD/S3M...) keep their text in one list.
+        names = inst if any(inst) else smp
+        out += ["", "--- instrument & sample names " + "-" * 29]
+        out += [f"{i + 1:3d}  {n}" for i, n in enumerate(names)]
+    return "\n".join(out) + "\n"
+
+
+def read_module_text(input_path, lib_path=None):
+    """Load a module just to read its hidden text. Returns
+    (info_dict, formatted_text). Raises RuntimeError/SystemExit like
+    the other loaders when the file cannot be read."""
+    if not os.path.isfile(input_path):
+        raise SystemExit(f"error: file not found: {input_path}")
+    with open(input_path, "rb") as f:
+        blob = f.read()
+    if len(blob) < 64:
+        raise SystemExit("error: file too small to be a tracker module")
+    engine = XmpEngine(find_libxmp(lib_path))
+    try:
+        info = engine.load(blob)
+        text = format_module_text(info, os.path.basename(input_path))
+        parts = module_text_parts(info)
+    finally:
+        engine.unload(info)
+    return {"title": info["title"], "type": info["type"],
+            "comment": info["comment"], "parts": parts}, text
 
 
 # ---------------------------------------------------------------------------
@@ -372,4 +455,8 @@ def print_info(input_path, lib_path=None):
             f"{'16bit' if s['flg'] & XMP_SAMPLE_16BIT else '8bit'}"
             f"{' stereo' if s['flg'] & XMP_SAMPLE_STEREO else ''}")
     engine.unload(info)
+    parts = module_text_parts(info)
+    if parts:
+        lines.append("")
+        lines.append(format_module_text(info, os.path.basename(input_path)))
     return "\n".join(lines)

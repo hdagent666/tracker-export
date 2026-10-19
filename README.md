@@ -16,6 +16,10 @@ song_export/
                           sample's label in the module, with loop points
                           embedded (smpl chunk) for your sampler
     manifest.txt          what everything is
+    messages.txt          any text hidden in the module: its title, the
+                          song message (IT), and the instrument/sample
+                          names in slot order — where demo-scene authors
+                          hid their greetings
 ```
 
 Sample WAVs are written at each format's native rate (MOD: 8287 Hz, base
@@ -65,7 +69,9 @@ a folder (**Add folder** crawls it and all subfolders for modules),
 **2** pick a destination (blank = an export folder next to each module;
 the destination and your selections are remembered between launches),
 **3** tick stems/samples and a render rate, **4** review the queue,
-**5** watch the terminal, then hit **EXPORT**. The whole queue is
+**5** watch the terminal — or click a queued module and flip to
+**Messages from the past** to read the text hidden inside it — then
+hit **EXPORT**. The whole queue is
 exported as one batch; files that fail to load are logged and skipped,
 not fatal. Use **Show last export** when it finishes to jump straight
 to the files.
