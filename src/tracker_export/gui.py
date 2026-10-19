@@ -1,6 +1,8 @@
 """Desktop GUI: `tracker-export-gui`. Tkinter, stdlib only.
 
 Supports batch export: queue individual files or crawl whole folders.
+Themed after FastTracker II: dark slate panels, chunky beveled buttons,
+and a pattern-editor style log (black background, green data lines).
 """
 
 import os
@@ -21,13 +23,80 @@ FILETYPES = [
     ("All files", "*.*"),
 ]
 
+# --- FastTracker II palette -------------------------------------------------
+BG = "#2A2A44"          # main slate panel
+PANEL = "#343452"       # raised panel
+DEEP = "#101024"        # sunken wells (list, entry)
+BLACK = "#000000"       # pattern editor background
+BTN = "#4A4A74"         # button face
+BTN_ACTIVE = "#606096"  # button hover
+BTN_PRESSED = "#38385C"
+FG = "#E6E6F2"          # main text
+DIM = "#9D9DC0"         # secondary text
+LOGFG = "#CDCDDE"       # pattern data text
+ACCENT = "#FFFF55"      # FT2 yellow highlight
+GREEN = "#50FF50"       # instrument-number green
+RED = "#FF5050"
+SELECT = "#3D3DBB"      # selection blue
+BAR = "#00E040"         # progress green
+
+FONT = ("Courier New", 11)
+FONT_B = ("Courier New", 11, "bold")
+FONT_LOG = ("Courier New", 10)
+FONT_TITLE = ("Courier New", 25, "bold")
+FONT_SUB = ("Courier New", 10, "bold")
+
+
+def _apply_ft2_theme(root):
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure(".", background=BG, foreground=FG, font=FONT,
+                    bordercolor="#1A1A2E")
+    style.configure("TFrame", background=BG)
+    style.configure("TLabel", background=BG, foreground=FG, font=FONT)
+    style.configure("Head.TLabel", font=FONT_B, foreground=FG)
+    style.configure("Dim.TLabel", foreground=DIM, font=("Courier New", 10))
+    style.configure("Status.TLabel", foreground=ACCENT, font=FONT_B)
+    style.configure("Count.TLabel", foreground=DIM, font=FONT)
+
+    style.configure("TButton", background=BTN, foreground="#FFFFFF",
+                    font=FONT_B, borderwidth=2, relief="raised",
+                    padding=(9, 4), focusthickness=0)
+    style.map("TButton",
+              background=[("pressed", BTN_PRESSED),
+                          ("active", BTN_ACTIVE),
+                          ("disabled", PANEL)],
+              foreground=[("disabled", DIM)],
+              relief=[("pressed", "sunken")])
+
+    style.configure("TCheckbutton", background=BG, foreground=FG,
+                    font=FONT)
+    style.map("TCheckbutton",
+              background=[("active", BG)],
+              foreground=[("disabled", DIM)])
+
+    style.configure("TEntry", fieldbackground=DEEP, foreground=FG,
+                    insertcolor="#FFFFFF", borderwidth=2, padding=3)
+
+    style.configure("TScrollbar", background=BTN, troughcolor=PANEL,
+                    arrowcolor="#FFFFFF", borderwidth=1)
+    style.map("TScrollbar", background=[("active", BTN_ACTIVE)])
+
+    style.configure("FT2.Horizontal.TProgressbar",
+                    troughcolor=DEEP, background=BAR,
+                    lightcolor=BAR, darkcolor="#00701C",
+                    borderwidth=1, thickness=14)
+    return style
+
 
 class ExportApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f"Tracker Export {__version__}")
-        self.geometry("640x600")
-        self.minsize(560, 520)
+        self.title(f"Tracker Export II — v{__version__}")
+        self.geometry("680x660")
+        self.minsize(580, 560)
+        self.configure(background=BG)
+        _apply_ft2_theme(self)
 
         self.outdir_var = tk.StringVar()
         self.stems_var = tk.BooleanVar(value=True)
@@ -43,20 +112,54 @@ class ExportApp(tk.Tk):
 
     # -- UI ---------------------------------------------------------------
 
+    def _banner(self, parent):
+        banner = tk.Frame(parent, background=BLACK,
+                          highlightbackground="#55557F", highlightthickness=1)
+        banner.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        banner.columnconfigure(0, weight=1)
+        left = tk.Frame(banner, background=BLACK)
+        left.grid(row=0, column=0, sticky="w", padx=12, pady=8)
+        title = tk.Frame(left, background=BLACK)
+        title.pack(anchor="w")
+        tk.Label(title, text="TRACKER EXPORT", font=FONT_TITLE,
+                 foreground="#FFFFFF", background=BLACK).pack(side="left")
+        tk.Label(title, text=" II", font=FONT_TITLE,
+                 foreground=ACCENT, background=BLACK).pack(side="left")
+        tk.Label(left, text="S T E M S   +   S A M P L E S   B O U N C E R",
+                 font=FONT_SUB, foreground=DIM,
+                 background=BLACK).pack(anchor="w", pady=(2, 0))
+        tk.Label(banner,
+                 text="C-4 01 ·· ···\nE-4 02 ·· A06\nG-4 01 ·· ···",
+                 font=FONT_LOG, foreground=GREEN, background=BLACK,
+                 justify="left").grid(row=0, column=1, sticky="e",
+                                      padx=12)
+
     def _build_ui(self):
         pad = {"padx": 10, "pady": 4}
         main = ttk.Frame(self)
         main.pack(fill="both", expand=True, **pad)
         main.columnconfigure(0, weight=1)
 
-        ttk.Label(main, text="Modules to export:").grid(
-            row=0, column=0, sticky="w")
+        self._banner(main)
+
+        hdr = ttk.Frame(main)
+        hdr.grid(row=1, column=0, sticky="ew")
+        ttk.Label(hdr, text="MODULES TO EXPORT:",
+                  style="Head.TLabel").pack(side="left")
+        self.count_label = ttk.Label(hdr, text="0 modules queued",
+                                     style="Count.TLabel")
+        self.count_label.pack(side="right")
 
         list_frame = ttk.Frame(main)
-        list_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 2))
+        list_frame.grid(row=2, column=0, sticky="nsew", pady=(2, 2))
         list_frame.columnconfigure(0, weight=1)
-        main.rowconfigure(1, weight=1)
-        self.queue_box = tk.Listbox(list_frame, height=7, selectmode="extended")
+        main.rowconfigure(2, weight=1)
+        self.queue_box = tk.Listbox(
+            list_frame, height=7, selectmode="extended",
+            background=DEEP, foreground=FG, font=FONT,
+            selectbackground=SELECT, selectforeground="#FFFFFF",
+            relief="sunken", borderwidth=2, highlightthickness=0,
+            activestyle="none")
         self.queue_box.grid(row=0, column=0, sticky="nsew")
         sb = ttk.Scrollbar(list_frame, orient="vertical",
                            command=self.queue_box.yview)
@@ -64,7 +167,7 @@ class ExportApp(tk.Tk):
         self.queue_box.configure(yscrollcommand=sb.set)
 
         btns = ttk.Frame(main)
-        btns.grid(row=2, column=0, sticky="w", pady=(0, 2))
+        btns.grid(row=3, column=0, sticky="w", pady=(2, 2))
         ttk.Button(btns, text="Add files...",
                    command=self._add_files).pack(side="left")
         ttk.Button(btns, text="Add folder...",
@@ -74,46 +177,73 @@ class ExportApp(tk.Tk):
                                                         padx=(16, 0))
         ttk.Button(btns, text="Clear",
                    command=self._clear_queue).pack(side="left", padx=(6, 0))
-        self.count_label = ttk.Label(btns, text="0 modules queued")
-        self.count_label.pack(side="left", padx=(16, 0))
 
         out = ttk.Frame(main)
-        out.grid(row=3, column=0, sticky="ew", pady=(8, 0))
+        out.grid(row=4, column=0, sticky="ew", pady=(8, 0))
         out.columnconfigure(1, weight=1)
-        ttk.Label(out, text="Output folder:").grid(row=0, column=0, sticky="w")
+        ttk.Label(out, text="OUTPUT FOLDER:", style="Head.TLabel").grid(
+            row=0, column=0, sticky="w")
         ttk.Entry(out, textvariable=self.outdir_var).grid(
             row=0, column=1, sticky="ew", padx=6)
         ttk.Button(out, text="Browse...", command=self._pick_outdir).grid(
             row=0, column=2)
         ttk.Label(main,
                   text="Blank = an <title>_export folder next to each "
-                       "module file.").grid(row=4, column=0, sticky="w")
+                       "module file.",
+                  style="Dim.TLabel").grid(row=5, column=0, sticky="w")
 
         opts = ttk.Frame(main)
-        opts.grid(row=5, column=0, sticky="w", pady=(8, 0))
+        opts.grid(row=6, column=0, sticky="w", pady=(8, 0))
         ttk.Checkbutton(opts, text="Stems (one WAV per channel)",
                         variable=self.stems_var).pack(side="left")
         ttk.Checkbutton(opts, text="Samples (labeled WAVs)",
                         variable=self.samples_var).pack(side="left",
                                                     padx=(12, 0))
-        ttk.Label(opts, text="Render rate:").pack(side="left", padx=(16, 4))
-        ttk.Combobox(opts, textvariable=self.sr_var, width=8,
-                     values=[22050, 32000, 44100, 48000, 88200, 96000],
-                     state="readonly").pack(side="left")
+        rate = ttk.Frame(main)
+        rate.grid(row=7, column=0, sticky="w", pady=(4, 0))
+        ttk.Label(rate, text="RENDER RATE:").pack(side="left",
+                                                  padx=(0, 6))
+        sr_menu = tk.OptionMenu(rate, self.sr_var, 22050, 32000, 44100,
+                                48000, 88200, 96000)
+        sr_menu.configure(background=BTN, foreground="#FFFFFF",
+                          font=FONT_B, activebackground=BTN_ACTIVE,
+                          activeforeground="#FFFFFF", width=7,
+                          highlightthickness=0, borderwidth=2,
+                          relief="raised")
+        sr_menu["menu"].configure(background=DEEP, foreground=FG,
+                                  font=FONT, activebackground=SELECT,
+                                  activeforeground="#FFFFFF")
+        sr_menu.pack(side="left")
+        ttk.Label(rate, text="Hz").pack(side="left", padx=(6, 0))
 
         self.progress = ttk.Progressbar(main, mode="determinate",
-                                        maximum=1000)
-        self.progress.grid(row=6, column=0, sticky="ew", pady=(10, 0))
-        self.status = ttk.Label(main, text="Ready.")
-        self.status.grid(row=7, column=0, sticky="w")
+                                        maximum=1000,
+                                        style="FT2.Horizontal.TProgressbar")
+        self.progress.grid(row=8, column=0, sticky="ew", pady=(10, 0))
+        self.status = ttk.Label(main, text="Ready.", style="Status.TLabel")
+        self.status.grid(row=9, column=0, sticky="w")
 
-        self.log = tk.Text(main, height=10, wrap="word",
-                           state="disabled")
-        self.log.grid(row=8, column=0, sticky="nsew", pady=(4, 0))
-        main.rowconfigure(8, weight=1)
+        log_frame = ttk.Frame(main)
+        log_frame.grid(row=10, column=0, sticky="nsew", pady=(4, 0))
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+        main.rowconfigure(10, weight=1)
+        self.log = tk.Text(log_frame, height=10, wrap="word",
+                           state="disabled", background=BLACK,
+                           foreground=LOGFG, font=FONT_LOG,
+                           insertbackground="#FFFFFF", relief="sunken",
+                           borderwidth=2, highlightthickness=0)
+        self.log.grid(row=0, column=0, sticky="nsew")
+        lsb = ttk.Scrollbar(log_frame, orient="vertical",
+                            command=self.log.yview)
+        lsb.grid(row=0, column=1, sticky="ns")
+        self.log.configure(yscrollcommand=lsb.set)
+        self.log.tag_configure("head", foreground=GREEN, font=FONT_B)
+        self.log.tag_configure("err", foreground=RED)
+        self.log.tag_configure("ok", foreground=ACCENT, font=FONT_B)
 
         actions = ttk.Frame(main)
-        actions.grid(row=9, column=0, sticky="e", pady=(8, 0))
+        actions.grid(row=11, column=0, sticky="e", pady=(8, 0))
         self.reveal_btn = ttk.Button(
             actions, text="Show last export", state="disabled",
             command=self._reveal)
@@ -123,8 +253,11 @@ class ExportApp(tk.Tk):
             command=self._cancel)
         self.cancel_btn.pack(side="left", padx=(0, 8))
         self.export_btn = ttk.Button(
-            actions, text="Export", command=self._start_export)
+            actions, text="EXPORT", command=self._start_export)
         self.export_btn.pack(side="left")
+
+        self._log("Tracker Export II ready. Add files or a folder, "
+                  "then hit EXPORT.")
 
     # -- queue management ---------------------------------------------------
 
@@ -272,8 +405,13 @@ class ExportApp(tk.Tk):
         self.cancel_btn.configure(state="disabled")
 
     def _log(self, msg):
+        tag = None
+        if msg.startswith("---") or msg.startswith("Batch complete"):
+            tag = "ok" if msg.startswith("Batch complete") else "head"
+        elif "SKIPPED" in msg or "FAILED" in msg or msg.startswith("error"):
+            tag = "err"
         self.log.configure(state="normal")
-        self.log.insert("end", msg + "\n")
+        self.log.insert("end", msg + "\n", tag)
         self.log.see("end")
         self.log.configure(state="disabled")
 

@@ -57,6 +57,9 @@ python -m tracker_export.cli song.mod
 
 ## GUI
 
+The GUI wears a FastTracker II theme: dark slate panels, chunky beveled
+buttons, and a pattern-editor style log (green data lines, red skips).
+
 Launch `tracker-export-gui`, build a queue with **Add files** or
 **Add folder** (crawls the folder and all subfolders for modules),
 choose an output folder (blank = an export folder next to each module),
