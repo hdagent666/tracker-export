@@ -60,12 +60,15 @@ python -m tracker_export.cli song.mod
 The GUI wears a FastTracker II theme: dark slate panels, chunky beveled
 buttons, and a pattern-editor style log (green data lines, red skips).
 
-Launch `tracker-export-gui`, build a queue with **Add files** or
-**Add folder** (crawls the folder and all subfolders for modules),
-choose an output folder (blank = an export folder next to each module),
-tick stems/samples, hit **Export**. The whole queue is exported as one
-batch; files that fail to load are logged and skipped, not fatal.
-Use **Show last export** when it finishes to jump straight to the files.
+Launch `tracker-export-gui` and work top to bottom: **1** add files or
+a folder (**Add folder** crawls it and all subfolders for modules),
+**2** pick a destination (blank = an export folder next to each module;
+the destination and your selections are remembered between launches),
+**3** tick stems/samples and a render rate, **4** review the queue,
+**5** watch the terminal, then hit **EXPORT**. The whole queue is
+exported as one batch; files that fail to load are logged and skipped,
+not fatal. Use **Show last export** when it finishes to jump straight
+to the files.
 
 ## CLI
 
