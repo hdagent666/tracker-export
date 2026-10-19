@@ -113,7 +113,7 @@ class ExportApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"Tracker Export II — v{__version__}")
-        self.geometry("680x730")
+        self.geometry("700x770")
         self.minsize(580, 640)
         self.configure(background=BG)
         _apply_ft2_theme(self)
@@ -164,10 +164,10 @@ class ExportApp(tk.Tk):
     def _banner(self, parent, row):
         banner = tk.Frame(parent, background=BLACK,
                           highlightbackground="#55557F", highlightthickness=1)
-        banner.grid(row=row, column=0, sticky="ew", pady=(0, 8))
+        banner.grid(row=row, column=0, sticky="ew", pady=(0, 10))
         banner.columnconfigure(0, weight=1)
         left = tk.Frame(banner, background=BLACK)
-        left.grid(row=0, column=0, sticky="w", padx=12, pady=8)
+        left.grid(row=0, column=0, sticky="w", padx=14, pady=10)
         title = tk.Frame(left, background=BLACK)
         title.pack(anchor="w")
         tk.Label(title, text="TRACKER EXPORT", font=FONT_TITLE,
@@ -182,12 +182,13 @@ class ExportApp(tk.Tk):
         # messages), white text, slot numbers down the left, scrolling
         # vertically when the text overflows the square.
         groove = tk.Frame(banner, background="#55557F")
-        groove.grid(row=0, column=1, sticky="e", padx=12, pady=8)
+        groove.grid(row=0, column=1, sticky="e", padx=14, pady=10)
         self.box = tk.Text(groove, width=31, height=BOX_ROWS,
                            font=FONT_LOG, background=BLACK,
                            foreground="#F0F0F0", relief="flat",
                            borderwidth=0, highlightthickness=0,
-                           wrap="none", padx=5, pady=3,
+                           wrap="none", padx=11, pady=7,
+                           spacing1=1, spacing3=1,
                            state="disabled", cursor="arrow")
         self.box.pack(padx=1, pady=1)
         self.box.tag_configure("num", foreground=DIM)
@@ -197,10 +198,10 @@ class ExportApp(tk.Tk):
 
     def _step(self, parent, row, text):
         ttk.Label(parent, text=text, style="Head.TLabel").grid(
-            row=row, column=0, sticky="w", pady=(8, 2))
+            row=row, column=0, sticky="w", pady=(11, 3))
 
     def _build_ui(self):
-        pad = {"padx": 10, "pady": 4}
+        pad = {"padx": 12, "pady": 6}
         main = ttk.Frame(self)
         main.pack(fill="both", expand=True, **pad)
         main.columnconfigure(0, weight=1)
@@ -283,7 +284,7 @@ class ExportApp(tk.Tk):
 
         # 5 · TERMINAL / MESSAGES FROM THE PAST --------------------------------
         hdr5 = ttk.Frame(main)
-        hdr5.grid(row=11, column=0, sticky="ew", pady=(8, 2))
+        hdr5.grid(row=11, column=0, sticky="ew", pady=(11, 3))
         ttk.Label(hdr5, text="5 · TERMINAL / MESSAGES",
                   style="Head.TLabel").pack(side="left")
         self.msg_tab_btn = tk.Button(
@@ -310,7 +311,8 @@ class ExportApp(tk.Tk):
         text_kw = dict(height=9, wrap="word", state="disabled",
                        background=BLACK, foreground=LOGFG, font=FONT_LOG,
                        insertbackground="#FFFFFF", relief="sunken",
-                       borderwidth=2, highlightthickness=0)
+                       borderwidth=2, highlightthickness=0,
+                       padx=10, pady=7, spacing1=1, spacing3=1)
         self.log = tk.Text(log_frame, **text_kw)
         self.log.grid(row=0, column=0, sticky="nsew")
         self.messages = tk.Text(log_frame, **text_kw)
@@ -334,12 +336,12 @@ class ExportApp(tk.Tk):
         self.progress = ttk.Progressbar(main, mode="determinate",
                                         maximum=1000,
                                         style="FT2.Horizontal.TProgressbar")
-        self.progress.grid(row=13, column=0, sticky="ew", pady=(10, 0))
+        self.progress.grid(row=13, column=0, sticky="ew", pady=(12, 0))
         self.status = ttk.Label(main, text="Ready.", style="Status.TLabel")
         self.status.grid(row=14, column=0, sticky="w")
 
         actions = ttk.Frame(main)
-        actions.grid(row=15, column=0, sticky="e", pady=(8, 0))
+        actions.grid(row=15, column=0, sticky="e", pady=(10, 2))
         self.reveal_btn = ttk.Button(
             actions, text="Show last export", state="disabled",
             command=self._reveal)
